@@ -1,14 +1,14 @@
-% Build Script Support
+% Поддержка сборочных скриптов
 
-Some packages need to compile third-party non-Rust code, for example C
-libraries. Other packages need to link to C libraries which can either be
-located on the system or possibly need to be built from source. Others still
-need facilities for functionality such as code generation before building (think
-parser generators).
+Некоторые пакеты требуют компиляции стороннего кода написанного на других
+языках программирования, например СИ-библиотек. Другие пакеты предназначены
+для линковки с СИ-библиотеками. Они могут располагаться где-то в системе, или
+собираться из исходников. Третий вариант - это контейнеры, которые требуют 
+дополнительной подготовки к сборке, например генерации кода перед сборкой.
 
-Cargo does not aim to replace other tools that are well-optimized for
-these tasks, but it does integrate with them with the `build` configuration
-option.
+Cargo не ставит целью заменить инструменты которые хорошо оптимизированы
+для своих задач. Вместо этого, данные инструменты можно интегрировать в процесс 
+сборки посредством опции `build` сборочного манифеста.
 
 ```toml
 [package]
@@ -16,35 +16,42 @@ option.
 build = "build.rs"
 ```
 
-The Rust file designated by the `build` command (relative to the package root)
-will be compiled and invoked before anything else is compiled in the package,
-allowing your Rust code to depend on the built or generated artifacts. Note
-that there is no default value for `build`, it must be explicitly specified if
-required.
+Rust файл, указанный в опции `build` (относительно корня пакета) будет
+скомпилирован и выполнен перед тем, как что-либо еще будет компилироваться
+в этом пакете. Это позволяет вашему rust-коду зависеть от других собранных
+или сгенерированных артефактов. Опция `build` не имеет значения по умолчанию,
+и должна быть указана явно, если это требуется.
 
-Some example use cases of the build command are:
+Причание. В rust 1.17 этот механизм был доработан следующим образом. Если
+в корневой директории контейнера есть файл build.rs, то считается, что опция
+build = "build.rs" указана. Отключить это вы можете задав build=false.
 
-* Building a bundled C library.
-* Finding a C library on the host system.
-* Generating a Rust module from a specification.
-* Performing any platform-specific configuration needed for the crate.
+Примеры случаев, для которых подходит опция `build`:
 
-Each of these use cases will be detailed in full below to give examples of how
-the build command works.
+ * Сборка статической С-библиотеки
+ * Поиск С-библиотеки на диске
+ * Генерация rust-модуля из спецификации
+ * Осуществление любой платформо-специфичной конфигурации, которая нужна для сборки
 
-## Inputs to the Build Script
+Каждый из этих случаев детально описан ниже для пояснения того, как работает 
+опция `build`.
 
-When the build script is run, there are a number of inputs to the build script,
-all passed in the form of [environment variables][env].
+## Входные данные для скрипта сборки
 
-In addition to environment variables, the build script’s current directory is
-the source directory of the build script’s package.
+Когда вы запускаете скрипт сборки, можно задать параметры, которые передаются
+путем задания переменных окружения [environment variables][env].
+
+Вдобавок к переменным окружения, текущая директория скрипта сборки является
+директорией пакета скрипта сборки.
 
 [env]: environment-variables.html
 
-## Outputs of the Build Script
+## Выходной результат скрипта сборки
 
-All the lines printed to stdout by a build script are written to a file like `target/debug/build/<pkg>/output` (the precise location may depend on your configuration). Any line that starts with `cargo:` is interpreted directly by Cargo. This line must be of the form `cargo:key=value`, like the examples below:
+Все строки, которые будут напечатаны в stdout, будут записаны в файл
+`target/debug/build/<pkg>/output` (точное расположение зависит от вашей конфигурации).
+Все строки, которые начинаются с `cargo:` интерпретируются напрямую cargo. 
+Эти строки обязаны задаваться в форме `cargo:key=value`, как показано в примере:
 
 ```notrust
 cargo:rustc-link-lib=static=foo
@@ -55,57 +62,57 @@ cargo:libdir=/path/to/foo/lib
 cargo:include=/path/to/foo/include
 ```
 
-There are a few special keys that Cargo recognizes, some affecting how the
-crate is built:
+Ниже перечислены ключи, которые влияют на cargo:
 
-* `rustc-link-lib` indicates that the specified value should be passed to the
-  compiler as a `-l` flag.
-* `rustc-link-search` indicates the specified value should be passed to the
-  compiler as a `-L` flag.
-* `rustc-cfg` indicates that the specified directive will be passed as a `--cfg`
-  flag to the compiler. This is often useful for performing compile-time
-  detection of various features.
-* `rerun-if-changed` is a path to a file or directory which indicates that the
-  build script should be re-run if it changes (detected by a more-recent
-  last-modified timestamp on the file). Normally build scripts are re-run if
-  any file inside the crate root changes, but this can be used to scope changes
-  to just a small set of files. (If this path points to a directory the entire
-  directory will not be traversed for changes -- only changes to the timestamp
-  of the directory itself (which corresponds to some types of changes within the
-  directory, depending on platform) will trigger a rebuild. To request a re-run
-  on any changes within an entire directory, print a line for the directory and
-  another line for everything inside it, recursively.)
-* `warning` is a message that will be printed to the main console after a build
-  script has finished running. Warnings are only shown for path dependencies
-  (that is, those you're working on locally), so for example warnings printed
-  out in crates.io crates are not emitted by default.
+* `rustc-link-lib=[KIND=]NAME` передать указанное значение компилятору с опцией `-l`.
+  Опциональный параметр KIND может принимать значения static, dylib(по умолчанию), 
+  framework. Для получения подробностей см. rustc --help
+* `rustc-link-search=[KIND=]PATH` передать указанное значение компилятору с опцией `-L`.
+  Опциональный параметр KIND может быть одним из: dependency, crate, native, framework,
+   all (по умолчанию). См. rustc --help для подробностей.
+* `rustc-flags=FLAGS` набор флагов, которые следует передать компилятору. 
+  Поддерживаются только `-l` и `-L` (Прим.переводчика -- тогда на кой оно нужно?). 
+* `rustc-cfg=FEATURE` указывает передать компилятору c директивой `--cfg`
+  указанную возможность. Это может быть полезным для определения на этапе компиляции
+  различных возможностей.
 
-Any other element is a user-defined metadata that will be passed to
-dependents. More information about this can be found in the [`links`][links]
-section.
+* `rerun-if-changed=PATH` путь к файлу или директории, которые при изменении
+  должны вызвать перезапуск скрипта сборки(определяется по атрибуту last-modified).
+  Обычно скрипт сборки перезапускается если любой файл внутри контейнера изменяется. 
+  Эта опция позволяет указать более узкий набор файлов. Если опция указывает
+  на директорию, то cargo смотрит только на изменение времени модификации директории,
+  и не смотрит на каждый файл. Для того, чтобы скрипт перезапускался при любом изменении
+  во всей директории, напечатайте строку с директорией и другую строку для всего
+  внутри нее, рекурсивно. 
 
-[links]: #the-links-manifest-key
+* `warning=MESSAGE` это сообщение будет напечатано в основную консоль после того, как
+  скрипт сборки закончит выполнение. Варнинги печатаются только на зависимостях,
+  добавленных через path. Таким образом, варнинги на зависимостях, которые приползли с
+  crates.io не эмитятся по умолчанию.
 
-## Build Dependencies
+Любой другой элемент является пользовательскими мета-данными, и передается зависимостям.
+Больше информации можно найти в секции [`links`][links].
 
-Build scripts are also allowed to have dependencies on other Cargo-based crates.
-Dependencies are declared through the `build-dependencies` section of the
-manifest.
+[links]: #Опция-сборочного-манифеста-links
+
+## Зависимости для процесса сборки
+
+Скрипт сборки может иметь зависимости на другие cargo-пакеты.
+Эти зависимости объявляются в секции `build-dependencies`.
 
 ```toml
 [build-dependencies]
 foo = { git = "https://github.com/your-packages/foo" }
 ```
 
-The build script **does not** have access to the dependencies listed in the
-`dependencies` or `dev-dependencies` section (they’re not built yet!). All build
-dependencies will also not be available to the package itself unless explicitly
-stated as so.
+Скрипту сборки НЕ ДОСТУПНЫ зависимости, перечисленные в секциях
+`dependencies` и `dev-dependencies`. Так же, все зависимости этапа сборки 
+недоступны пакету, и если они нужны, то их следует указать явно.
 
-## The `links` Manifest Key
+## Опция сборочного манифеста `links`
 
-In addition to the manifest key `build`, Cargo also supports a `links` manifest
-key to declare the name of a native library that is being linked to:
+В добавление к опции `build`, Cargo поддерживает опцию `links` для указания
+нативных библиотек, которые следует прилинковать.
 
 ```toml
 [package]
@@ -114,42 +121,36 @@ links = "foo"
 build = "build.rs"
 ```
 
-This manifest states that the package links to the `libfoo` native library, and
-it also has a build script for locating and/or building the library. Cargo
-requires that a `build` command is specified if a `links` entry is also
-specified.
+Это означает, что пакет линкуется с нативной библиотекой `libfoo`, и он
+имеет скрипт сборки, который находит/собирает эту библиотеку. Cargo
+требует, чтобы опция `build` была указана, если вы используете опцию `links`.
 
-The purpose of this manifest key is to give Cargo an understanding about the set
-of native dependencies that a package has, as well as providing a principled
-system of passing metadata between package build scripts.
+Цель этого ключа - чтобы Cargo знал о наборе используемых нативных библиотек,
+и передавал эту метаинформацию между скриптами сборки пакетов.
 
-Primarily, Cargo requires that there is at most one package per `links` value.
-In other words, it’s forbidden to have two packages link to the same native
-library. Note, however, that there are [conventions in place][star-sys] to
-alleviate this.
+Вы не можете слинковать несколько пакетов с одной нативной либой.
+Однако есть [определенные случаи соглашений][star-sys] в которых это требование
+смягчено.
 
-[star-sys]: #-sys-packages
+[star-sys]: #-sys-пакеты
 
-As mentioned above in the output format, each build script can generate an
-arbitrary set of metadata in the form of key-value pairs. This metadata is
-passed to the build scripts of **dependent** packages. For example, if `libbar`
-depends on `libfoo`, then if `libfoo` generates `key=value` as part of its
-metadata, then the build script of `libbar` will have the environment variables
-`DEP_FOO_KEY=value`.
+Как мы выяснили выше, каждый билд-скрипт может генерировать набор метаданных
+из пар ключ-значение. Эти метаданные передаются билд-скриптам зависимых пакетов.
 
-Note that metadata is only passed to immediate dependents, not transitive
-dependents. The motivation for this metadata passing is outlined in the linking
-to system libraries case study below.
+Например, если  `libbar` зависит от `libfoo`, тогда если `libfoo` генерирует
+`key=value` как часть своих метаданных, то билд-скрипт `libbar` будет иметь 
+переменную окружения `DEP_FOO_KEY=value`.
 
-## Overriding Build Scripts
+Также надо учитывать, что метаданные передаются непосредственно-зависящим пакетам,
+но не транзитивно на остальных. Мотивация такой передачи данных описана ниже
+в секции по линковке системных либ.
 
-If a manifest contains a `links` key, then Cargo supports overriding the build
-script specified with a custom library. The purpose of this functionality is to
-prevent running the build script in question altogether and instead supply the
-metadata ahead of time.
+## Явное указание метаданных
 
-To override a build script, place the following configuration in any acceptable
-Cargo [configuration location](config.html).
+Ключ `links` включает поддержку явного указания метаданных для конкретной библиотеки.
+Цель этого действия может состоять в том, чтобы сократить время компиляции.
+Для явного указания расположите соответствующую секцию конфигурации в 
+[любом доступном](config.html) для cargo месте .
 
 ```toml
 [target.x86_64-unknown-linux-gnu.foo]
@@ -159,23 +160,23 @@ root = "/path/to/foo"
 key = "value"
 ```
 
-This section states that for the target `x86_64-unknown-linux-gnu` the library
-named `foo` has the metadata specified. This metadata is the same as the
-metadata generated as if the build script had run, providing a number of
-key/value pairs where the `rustc-flags`, `rustc-link-search`, and
-`rustc-link-lib` keys are slightly special.
+Эта секция декларирует, что для цели `x86_64-unknown-linux-gnu` бибилотека с именем
+`foo` имеет явно указанные метаданные. Эти метаданные являются такими же, как
+можно было бы получить запустив сборочный скрипт, предоставляющий набор пар
+ключ-значение.
 
-With this configuration, if a package declares that it links to `foo` then the
-build script will **not** be compiled or run, and the metadata specified will
-instead be used.
+В таком варианте, если пакет декларирует, что линкуется с foo, сборочный скрипт
+**не будет** скомпилирован и запущен, что сэкономит время. Вместо этого будут
+использованы указанные метаданные.
 
-# Case study: Code generation
 
-Some Cargo packages need to have code generated just before they are compiled
-for various reasons. Here we’ll walk through a simple example which generates a
-library call as part of the build script.
+# Конкретный пример: кодогенерация
 
-First, let’s take a look at the directory structure of this package:
+Некоторые пакеты cargo требуют, чтобы перед началом компиляции была произведена
+генерация кода. Изучим простой пример, который осуществляет генерацию кода
+в процессе сборки проекта.
+
+Структура директории пакета выглядит следующим образом:
 
 ```notrust
 .
@@ -187,8 +188,8 @@ First, let’s take a look at the directory structure of this package:
 1 directory, 3 files
 ```
 
-Here we can see that we have a `build.rs` build script and our binary in
-`main.rs`. Next, let’s take a look at the manifest:
+Как мы можем видеть, имеется исходник скрипта `build.rs` и исходник бинарника
+`main.rs`. Содержимое Cargo.toml:
 
 ```toml
 # Cargo.toml
@@ -200,8 +201,8 @@ authors = ["you@example.com"]
 build = "build.rs"
 ```
 
-Here we can see we’ve got a build script specified which we’ll use to generate
-some code. Let’s see what’s inside the build script:
+Тут указано, что мы используем сборочный скрипт.
+Его содержимое следующее:
 
 ```rust,no_run
 // build.rs
@@ -224,18 +225,20 @@ fn main() {
 }
 ```
 
-There’s a couple of points of note here:
+Несколько комментариев к сборочному скрипту:
 
-* The script uses the `OUT_DIR` environment variable to discover where the
-  output files should be located. It can use the process’ current working
-  directory to find where the input files should be located, but in this case we
-  don’t have any input files.
-* This script is relatively simple as it just writes out a small generated file.
-  One could imagine that other more fanciful operations could take place such as
-  generating a Rust module from a C header file or another language definition,
-  for example.
+* Скрипт использует переменную окружения `OUT_DIR`, которая содержит путь к 
+  директории для сгенерированного кода. В качестве директории для входных файлов
+  используется текущая директория запущенного процесса. (в нашем случае
+  чтения каких бы то ни было входных файлов не производится)
+  
+* Этот скрипт тривиален. Он просто генерирует файл, содержащий маленький 
+  кусочек кода. В реальных задачах ваш скрипт сборки может делать что-то
+  более полезное. Например, это может быть генерация rust-модуля из СИ-хэдэров,
+  или каких-то других языков.
 
-Next, let’s peek at the library itself:
+
+Содержимое main.rs:
 
 ```rust,ignore
 // src/main.rs
@@ -247,21 +250,21 @@ fn main() {
 }
 ```
 
-This is where the real magic happens. The library is using the rustc-defined
-`include!` macro in combination with the `concat!` and `env!` macros to include
-the generated file (`hello.rs`) into the crate’s compilation.
+Как можно видеть, здесь не происходит никакой магии: мы подгружаем сгенерированный
+ранее код при помощи макроса `include!`. Макрос `concat!` осуществляет конкатенацию строк
+на этапе компиляции. Таким образом, получается путь к подгужаемому файлу.
 
-Using the structure shown here, crates can include any number of generated files
-from the build script itself.
+Используя показанную структуру, вы можете подгружать любое количество сгенерированных
+файлов.
 
-# Case study: Building some native code
+# Конкретный пример: сборка нативного кода
 
-Sometimes it’s necessary to build some native C or C++ code as part of a
-package. This is another excellent use case of leveraging the build script to
-build a native library before the Rust crate itself. As an example, we’ll create
-a Rust library which calls into C to print “Hello, World!”.
+Иногда нужно собрать нативный СИ или СИ++ код и использовать его как часть
+пакета. Это еще одна возможность, которую предоставляет сборочный скрипт.
+Для примера создадим rust-программу, которая вызывает СИ-код, который
+печатает “Hello, World!”.
 
-Like above, let’s first take a look at the project layout:
+Содержимое директории проекта:
 
 ```notrust
 .
@@ -274,7 +277,7 @@ Like above, let’s first take a look at the project layout:
 1 directory, 4 files
 ```
 
-Pretty similar to before! Next, the manifest:
+Содержимое Cargo.toml:
 
 ```toml
 # Cargo.toml
@@ -286,8 +289,7 @@ authors = ["you@example.com"]
 build = "build.rs"
 ```
 
-For now we’re not going to use any build dependencies, so let’s take a look at
-the build script now:
+Контент сборочного скрипта выглядит следующим образом:
 
 ```rust,no_run
 // build.rs
@@ -313,24 +315,26 @@ fn main() {
 }
 ```
 
-This build script starts out by compiling our C file into an object file (by
-invoking `gcc`) and then converting this object file into a static library (by
-invoking `ar`). The final step is feedback to Cargo itself to say that our
-output was in `out_dir` and the compiler should link the crate to `libhello.a`
-statically via the `-l static=hello` flag.
+Этот сборочный скрипт при запуске компилирует наш СИ файл в объектный файл 
+(при помощи `gcc`) и затем конвертирует этот объектник в статическую библиотеку
+(при помощи `ar`). На финальном шаге устанавливаются опции cargo, которые 
+предписывают искать библиотеку для линковки в `out_dir` и линковаться статически
+с библиотекой `libhello.a` (при запуске rustc будет использован 
+ключ `-l static=hello`).
 
-Note that there are a number of drawbacks to this hardcoded approach:
+К данному скрипту имеется несколько замечаний:
 
-* The `gcc` command itself is not portable across platforms. For example it’s
-  unlikely that Windows platforms have `gcc`, and not even all Unix platforms
-  may have `gcc`. The `ar` command is also in a similar situation.
-* These commands do not take cross-compilation into account. If we’re cross
-  compiling for a platform such as Android it’s unlikely that `gcc` will produce
-  an ARM executable.
+* Программа `gcc` присутствует не на всех платформах. Например, вряд ли на Windows 
+  будет gcc, и не все Unix-платформы могут иметь gcc. С командой `ar` аналогичная
+  ситуация.
+* Эти команды не учитывают случай, если мы производим кросс-компиляцию. Если мы 
+  производим кросс-компиляцию для платформы типа Андроид, то вряд ли gcc соберет
+  нам исполняемый файл с ARM-архитектурой.
 
-Not to fear, though, this is where a `build-dependencies` entry would help! The
-Cargo ecosystem has a number of packages to make this sort of task much easier,
-portable, and standardized. For example, the build script could be written as:
+Однако, не стоит отчаиваться. Нам поможет секция `build-dependencies`. Экосистема
+Cargo имеет пакеты, которые полностью или частично абстрагируют нас от платформы 
+и делают этот этап сборки более простым, портабельным и стандартизованным.
+Для примера, сборочный скрипт может быть написан следующим образом:
 
 ```rust,ignore
 // build.rs
@@ -344,32 +348,28 @@ fn main() {
 }
 ```
 
-Add a build time dependency on the `gcc` crate with the following addition to
-your `Cargo.toml`:
+Это потребует зависимости на `gcc` контейнер. Добавить ее понадобиться в `Cargo.toml`:
 
 ```toml
 [build-dependencies]
 gcc = "0.3"
 ```
 
-The [`gcc` crate](https://crates.io/crates/gcc) abstracts a range of build
-script requirements for C code:
+Контейнер [`gcc` crate](https://crates.io/crates/gcc) абстракция, позволяющая работать
+с различными вариантами, использующими С-код.
 
-* It invokes the appropriate compiler (MSVC for windows, `gcc` for MinGW, `cc`
-  for Unix platforms, etc.).
-* It takes the `TARGET` variable into account by passing appropriate flags to
-  the compiler being used.
-* Other environment variables, such as `OPT_LEVEL`, `DEBUG`, etc., are all
-  handled automatically.
-* The stdout output and `OUT_DIR` locations are also handled by the `gcc`
-  library.
+* Выполняется правильный компилятор (MSVC на windows, `gcc` на MinGW, `cc`
+  на Unix- платформах и т.д.).
+* Принимает переменную окружения TARGET для передачи правильных флажков компилятору.
+* Другие переменные окружения (`OPT_LEVEL`, `DEBUG`, и т.д.) обрабатываются автоматически.
+* Стандартный вывод и расположение директории `OUT_DIR` так же обрабатываются
+  контейнером `gcc`.
 
 Here we can start to see some of the major benefits of farming as much
 functionality as possible out to common build dependencies rather than
 duplicating logic across all build scripts!
 
-Back to the case study though, let’s take a quick look at the contents of the
-`src` directory:
+Вернемся к исследованию содержимого директории `src`:
 
 ```c
 // src/hello.c
@@ -384,9 +384,10 @@ void hello() {
 ```rust,ignore
 // src/main.rs
 
-// Note the lack of the `#[link]` attribute. We’re delegating the responsibility
-// of selecting what to link to over to the build script rather than hardcoding
-// it in the source file.
+// аттрибут `#[link]` не является необходимым. Мы делегируем решение того,
+// с какой либой линковаться в скрипт сборки, вместо того чтобы захардкодить
+// его в исходном коде
+ 
 extern { fn hello(); }
 
 fn main() {
@@ -398,13 +399,16 @@ And there we go! This should complete our example of building some C code from a
 Cargo package using the build script itself. This also shows why using a build
 dependency can be crucial in many situations and even much more concise!
 
-We’ve also seen a brief example of how a build script can use a crate as a
-dependency purely for the build process and not for the crate itself at runtime.
+Еще мы тут увидели пример использования в скрипте сборки зависимостей, специально
+предназначенных для процесса сборки.
 
-# Case study: Linking to system libraries
+# Конкретный пример: линковка с системными библиотеками
 
-The final case study here will be investigating how a Cargo library links to a
-system library and how the build script is leveraged to support this use case.
+В финальном примере будет показано как cargo линкуется с системными библиотеками,
+и как скрипт сборки может управлять этим процессом.
+
+
+Иногда для контейнеров rust требуются системные библиотеки.
 
 Quite frequently a Rust crate wants to link to a native library often provided
 on the system to bind its functionality or just use it as part of an
@@ -413,22 +417,21 @@ performing this in a platform-agnostic fashion, and the purpose of a build
 script is again to farm out as much of this as possible to make this as easy as
 possible for consumers.
 
-As an example to follow, let’s take a look at one of [Cargo’s own
-dependencies][git2-rs], [libgit2][libgit2]. This library has a number of
-constraints:
+В качестве примера рассмотрим одну из зависимостей самого cargo
+[Cargo’s own dependencies][git2-rs], [libgit2][libgit2]. Эта библиотека имеет
+некоторые ограничения:
 
 [git2-rs]: https://github.com/alexcrichton/git2-rs/tree/master/libgit2-sys
 [libgit2]: https://github.com/libgit2/libgit2
 
-* It has an optional dependency on OpenSSL on Unix to implement the https
-  transport.
-* It has an optional dependency on libssh2 on all platforms to implement the ssh
-  transport.
-* It is often not installed on all systems by default.
-* It can be built from source using `cmake`.
+* Имеет опциональную зависимость на OpenSSL на Unix-системах для реализации
+  https-транспорта.
+* Имеет опциональную зависимость на libssh2 на всех платформах для реализации 
+  ssh-транспорта.
+* Зачастую не установлена по умолчанию на всех системах.
+* Собирается из исходников при помощи `cmake`.
 
-To visualize what’s going on here, let’s take a look at the manifest for the
-relevant Cargo package.
+Чтобы понять, как это происходит, рассмотрим билд-манифест Cargo.toml.
 
 ```toml
 [package]
@@ -447,74 +450,78 @@ openssl-sys = { git = "https://github.com/alexcrichton/openssl-sys" }
 # ...
 ```
 
-As the above manifests show, we’ve got a `build` script specified, but it’s
-worth noting that this example has a `links` entry which indicates that the
-crate (`libgit2-sys`) links to the `git2` native library.
+Можно видеть, что в первой секции сборочного манифеста мы указываем сборочный скрипт 
+опцией `build`. Также этот пример имеет опцию `links`, которая указывает нашему
+контейнеру (crate `libgit2-sys`) линковаться с нативной либой `git2`.
 
-Here we also see the unconditional dependency on `libssh2` via the
-`libssh2-sys` crate, as well as a platform-specific dependency on `openssl-sys`
-for \*nix (other variants elided for now). It may seem a little counterintuitive
-to express *C dependencies* in the *Cargo manifest*, but this is actually using
-one of Cargo’s conventions in this space.
+Контейнер имеет безусловную зависимость на `libssh2` через указание
+`libssh2-sys` контейнера, и также платформо-специфичную зависимость на `openssl-sys`
 
-## `*-sys` Packages
+Тут имеется следующий интуитивно-непонятный момент: у нас указана Си-зависимость
+в сборочном манифесте cargo. Это является частью соглашений для cargo, которому
+посвящена следующая глава.
 
-To alleviate linking to system libraries, Cargo has a *convention* of package
-naming and functionality. Any package named `foo-sys` will provide two major
-pieces of functionality:
+## `*-sys` пакеты
 
-* The library crate will link to the native library `libfoo`. This will often
-  probe the current system for `libfoo` before resorting to building from
-  source.
-* The library crate will provide **declarations** for functions in `libfoo`,
-  but it does **not** provide bindings or higher-level abstractions.
+Для облегчения линковки с системными библиотеками cargo имеет *соглашение*
+по именованию пакетов и функциональности. Любой пакет с именем `foo-sys` 
+будет предоставлять две основные функциональные возможности:
 
-The set of `*-sys` packages provides a common set of dependencies for linking
-to native libraries. There are a number of benefits earned from having this
-convention of native-library-related packages:
+* контейнер будет линковаться с библиотекой `libfoo`. Обычно это вызывает
+  проверку того, что либа `libfoo` установлена в системе. Если не установлена,
+  то запускается процесс ее сборки.
+  
+* контейнер будет предоставлять **декларации** для функций в `libfoo`,
+  но **НЕ** предоставляет биндингов для абстракций более высокого уровня.
 
-* Common dependencies on `foo-sys` alleviates the above rule about one package
-  per value of `links`.
+Основное множество `*-sys` пакетов предоставляют основное множество зависимостей
+для линковки с нативными либами. Этим достигаются следующие выгоды для
+контейнеров, имеющих отношение к нативным либам:
+
+* Зависимости на `foo-sys` упрощают вышеописанное правило одного пакета 
+  на опцию `links`.
 * A common dependency allows centralizing logic on discovering `libfoo` itself
-  (or building it from source).
-* These dependencies are easily overridable.
+  (или сборку с исходников).
+* Эти зависимости легко переопределить.
 
-## Building libgit2
+## Сборка libgit2
 
-Now that we’ve got libgit2’s dependencies sorted out, we need to actually write
-the build script. We’re not going to look at specific snippets of code here and
-instead only take a look at the high-level details of the build script of
-`libgit2-sys`. This is not recommending all packages follow this strategy, but
-rather just outlining one specific strategy.
+Теперь, когда мы получили зависимости libgit2, нам нужно написать логику 
+сборочного скрипта. Мы не будем разбираться в узко-специфичных моментах кода
+и сконцентрируем свое внимание лишь на высокоуровневых деталях сборочного скрипта
+контейнера `libgit2-sys`. Это не является рекомендацией для всех пакетов, а лишь
+является одной из возможных специфичных стратегий.
 
-The first step of the build script should do is to query whether libgit2 is
-already installed on the host system. To do this we’ll leverage the preexisting
-tool `pkg-config` (when its available). We’ll also use a `build-dependencies`
+На первом шаге сборочный скрипт может попытаться найти место, в которое установлена
+libgit2. Это можно попытаться сделать при помощи предустановленного 
+ `pkg-config` (если он есть). We’ll also use a `build-dependencies`
 section to refactor out all the `pkg-config` related code (or someone’s already
 done that!).
 
-If `pkg-config` failed to find libgit2, or if `pkg-config` just wasn’t
-installed, the next step is to build libgit2 from bundled source code
-(distributed as part of `libgit2-sys` itself). There are a few nuances when
-doing so that we need to take into account, however:
+Если у `pkg-config` не получилось найти libgit2, или если `pkg-config` не 
+установлен, следующим шагом будет сборка libgit2 из встроенных исходников
+(которые распространяются как часть самого `libgit2-sys`).
+Есть несколько нюансов, которые стоит упомянуть.
 
-* The build system of libgit2, `cmake`, needs to be able to find libgit2’s
-  optional dependency of libssh2. We’re sure we’ve already built it (it’s a
-  Cargo dependency), we just need to communicate this information. To do this
-  we leverage the metadata format to communicate information between build
-  scripts. In this example the libssh2 package printed out `cargo:root=...` to
-  tell us where libssh2 is installed at, and we can then pass this along to
-  cmake with the `CMAKE_PREFIX_PATH` environment variable.
+* Система сборки libgit2, `cmake`, должна быть способна найти опциональную
+  зависимость для libgit2’s -- libssh2. Нам не помешает убедиться, что она
+  была собрана (это часть зависимостей Cargo), и мы должны обменяться с cargo
+  этой информацией.
+  Для осуществления этого используем формат метаданных для обмена между 
+  сборочными скриптами. В этом примере пакет libssh2 печатает `cargo:root=...` 
+  для того, чтобы сказать, куда libssh2 установлена. И мы передаем потом эту
+  информацию в cmake через переменную окружения `CMAKE_PREFIX_PATH`.
 
-* We’ll need to handle some `CFLAGS` values when compiling C code (and tell
-  `cmake` about this). Some flags we may want to pass are `-m64` for 64-bit
-  code, `-m32` for 32-bit code, or `-fPIC` for 64-bit code as well.
+* Нам надо указать специфичные `CFLAGS` флаги для сборки СИ-кода (и сказать
+  `cmake` об этом). Некоторые флаги могут потребовать указания ключа `-m64` для 
+  64-битного кода, `-m32` для 32-битного кода, или `-fPIC`
 
-* Finally, we’ll invoke `cmake` to place all output into the `OUT_DIR`
-  environment variable, and then we’ll print the necessary metadata to instruct
-  rustc how to link to libgit2.
+* На финальной стадии вызывается `cmake` и оказывается располагать весь выхлоп по
+  `OUT_DIR`, и потом мы печатаем необходимые метаданные для указания rustc как линковаться
+  с libgit2
 
-Most of the functionality of this build script is easily refactorable into
-common dependencies, so our build script isn’t quite as intimidating as this
-descriptions! In reality it’s expected that build scripts are quite succinct by
-farming logic such as above to build dependencies.
+Большая часть функциональности этого сборочного скрипта легко модифицируется под
+основные зависимости. Поэтому сборочных скрипт запугивает даже в меньшей степени, чем это 
+его описание. На самом деле, предполагается, что скрипты сборки достаточно кратки и 
+и содержат логику, подобную той, что было описано выше для построения 
+необходимых зависимостей.
