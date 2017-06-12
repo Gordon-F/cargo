@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <title>Способы указания зависимостей</title>
+
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css">
+<link rel="stylesheet" type="text/css" href="stylesheets/all.css">
+<link rel="stylesheet" type="text/css" href="stylesheets/prism.css">
+
+    <script src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+
+
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    <a href='https://github.com/ruRust/cargo-docs-ru' class='fork-me'>
+  <img src='images/forkme.png'/>
+</a>
+
+<div id="header">
+    <a href='https://crates.io' class='logo'>
+        <img id="logo" height=100 width=100 src='images/Cargo-Logo-Small.png'/>
+    </a>
+    <a href="index.html">
+        <h1>CARGO</h1>
+    </a>
+
+    <div class="search">
+        <form action="https://crates.io/search"
+              method="GET">
+            <input name="q" class="search" placeholder="Search crates" type="text"/>
+        </form>
+    </div>
+
+    <div class="nav">
+        <a href='https://crates.io/crates'>Browse All Crates</a>
+
+        <span class='sep'>|</span>
+
+        <div class="dropdown-container">
+            <button class="dropdown">
+                Docs
+                <span class="arrow"></span>
+            </button>
+            <ul id="current-user-links" class="dropdown" data-bindattr-503="503">
+                <li><a href='index.html'>Введение</a></li>
+                <li><a href='guide.html'>Руководство</a></li>
+                <li><a href='specifying-dependencies.html'>Specifying Dependencies</a></li>
+                <li><a href='crates-io.html'>Publishing on crates.io</a></li>
+                <li><a href='faq.html'>FAQ</a></li>
+                <li><a href='manifest.html'>Cargo.toml Format</a></li>
+                <li><a href='build-script.html'>Сборочные скрипты</a></li>
+                <li><a href='config.html'>Настройка</a></li>
+                <li><a href='pkgid-spec.html'>Package ID specs</a></li>
+                <li><a href='environment-variables.html'>Environment Variables</a></li>
+                <li><a href='source-replacement.html'>Source Replacement</a></li>
+                <li><a href='machine-readable-output.html'>Машиночитаемый вывод</a></li>
+                <li><a href='policies.html'>Policies</a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<main>
+
+
+    <h1 class="title">Способы указания зависимостей</h1>
+    <p>Ваши контейнеры (crates) могут зависеть от других библиотек с <a href="https://crates.io/">crates.io</a>, <code>git</code>
+репозиториев, или поддиректорий в локальной файловой системе. Вы также можете
+временно перезаписать расположение зависимости, например, чтобы проверить
+исправление в пакете, с которым вы работаете локально. Вы можете указать
+зависимости для различных платформ, и зависимости, используемые только при
+разработке. Давайте посмотрим, как этим управлять.</p>
+
+<h1 id='Указание-зависимостей-с-cratesio' class='section-header'><a href='#Указание-зависимостей-с-cratesio'>Указание зависимостей с crates.io</a></h1>
+<p>Cargo по-умолчанию настроен на поиск зависимостей по <a href="https://crates.io/">crates.io</a>. В этом случае
+требуется только название и строка, содержащая номер версии.
+В <a href="guide.html">руководстве по Cargo</a>, мы указали зависимость от
+контейнера <code>time</code>:</p>
+
+<pre><code class="language-toml">[dependencies]
+time = &quot;0.1.12&quot;
+</code></pre>
+
+<p>Строка <code>&quot;0.1.12&quot;</code> является строкой указания семантической версии, также
+известной как <a href="https://github.com/steveklabnik/semver#requirements">SemVer</a>. Поскольку эта строка не содержит каких-либо операторов,
+то эта строка интерпретируется также, как если бы мы указали строку <code>&quot;^0.1.12&quot;</code>,
+которую называют мажорным ограничением.
+Подробнее о семантическом версионировании можно прочитать на сайте
+<a href="http://semver.org/lang/ru/">semver.org</a>.</p>
+
+<h2 id='Мажорные-ограничения' class='section-header'><a href='#Мажорные-ограничения'>Мажорные ограничения</a></h2>
+<p><strong>Мажорное ограничение</strong> разрешает совместимые обновления указанной версии.
+Обновление допускается, если в номере новой версии не изменяется самая левая
+ненулевая цифра в группе <em>мажорная.минорная.патч</em>.
+В этом случае, если мы запустим <code>cargo update -p time</code>, cargo обновит пакет
+до <code>0.1.13</code>, если он доступен, но не обновит до <code>0.2.0</code>. Иначе, если указать
+строку версии как <code>^1.0</code>, cargo обновит до <code>1.1</code>, но не <code>2.0</code>. <code>0.0.x</code>
+считается несовместимым с любой другой версией.</p>
+
+<p>Вот несколько примеров мажорных ограничений и версий, которые оно разрешает:</p>
+
+<pre><code class="language-notrust">^1.2.3 := &gt;=1.2.3 &lt;2.0.0
+^1.2 := &gt;=1.2.0 &lt;2.0.0
+^1 := &gt;=1.0.0 &lt;2.0.0
+^0.2.3 := &gt;=0.2.3 &lt;0.3.0
+^0.0.3 := &gt;=0.0.3 &lt;0.0.4
+^0.0 := &gt;=0.0.0 &lt;0.1.0
+^0 := &gt;=0.0.0 &lt;1.0.0
+</code></pre>
+
+<p>Хотя семантическое версионирование подразумевает, что нет совместимости до
+1.0.0, многие программисты относятся к релизам <code>0.x.y</code> также, как к <code>1.x.y</code>
+релизам: то есть <code>y</code> увеличивается для обратно совместимых баг-фиксов, а <code>x</code>
+увеличивается при добавлении новых возможностей. Таким образом, Cargo считает
+<code>0.x.y</code> и <code>0.x.z</code> версии совместимыми, если<code>z &gt; y</code>.</p>
+
+<h2 id='Минорные-ограничения' class='section-header'><a href='#Минорные-ограничения'>Минорные ограничения</a></h2>
+<p><strong>Минорное ограничение</strong> указывает минимальную версию с некоторой возможностью
+обновления.
+Если вы указываете мажорную версию, минорную и номер патча или только мажорную
+и минорную версию, то допускаются изменения только на уровне версии патча.
+Если вы указываете только мажорный номер версии, то разрешается изменение на
+уровне минорной версии и версии патча.</p>
+
+<p><code>~1.2.3</code> является примером минорного ограничения.</p>
+
+<pre><code class="language-notrust">~1.2.3 := &gt;=1.2.3 &lt;1.3.0
+~1.2 := &gt;=1.2.0 &lt;1.3.0
+~1 := &gt;=1.0.0 &lt;2.0.0
+</code></pre>
+
+<h2 id='Позиционные-ограничения' class='section-header'><a href='#Позиционные-ограничения'>Позиционные ограничения</a></h2>
+<p><strong>Позиционное ограничение</strong> разрешает любую версию в соответствии с шаблоном.</p>
+
+<p><code>*</code>, <code>1.*</code> и <code>1.2.*</code> являются примерами позиционного ограничения.</p>
+
+<pre><code class="language-notrust">* := &gt;=0.0.0
+1.* := &gt;=1.0.0 &lt;2.0.0
+1.2.* := &gt;=1.2.0 &lt;1.3.0
+</code></pre>
+
+<h2 id='Ограничения-неравенством' class='section-header'><a href='#Ограничения-неравенством'>Ограничения неравенством</a></h2>
+<p><strong>Ограничение неравенством</strong> позволяет вручную указывать допустимый диапазон
+версий или конкретную версию, которая требуется.</p>
+
+<p>Ниже несколько примеров ограничения неравенством:</p>
+
+<pre><code class="language-notrust">&gt;= 1.2.0
+&gt; 1
+&lt; 2
+= 1.2.3
+</code></pre>
+
+<h2 id='Несколько-ограничений' class='section-header'><a href='#Несколько-ограничений'>Несколько ограничений</a></h2>
+<p>Несколько ограничений версии могут быть разделены через запятую,
+например, <code>&gt;= 1.2, &lt; 1.5</code>.</p>
+
+<h1 id='Указание-зависимостей-из-git-репозиториев' class='section-header'><a href='#Указание-зависимостей-из-git-репозиториев'>Указание зависимостей из <code>git</code> репозиториев</a></h1>
+<p>Для указания зависимости от библиотеки, расположенной в <code>git</code> репозитории,
+вы должны, как минимум, указать расположение репозитория с помощью ключа <code>git</code>:</p>
+
+<pre><code class="language-toml">[dependencies]
+rand = { git = &quot;https://github.com/rust-lang-nursery/rand&quot; }
+</code></pre>
+
+<p>Cargo загрузит <code>git</code> репозиторий, а затем
+будет искать <code>Cargo.toml</code> для запрошенного контейнера
+в любом месте <code>git</code> репозитория (не обязательно в корне).</p>
+
+<p>Поскольку мы не указали никакой другой информации, Cargo предполагает,
+что мы намерены использовать последний коммит в ветке <code>master</code>
+для сборки нашего проекта.
+Вы можете комбинировать ключ <code>git</code> с ключами <code>rev</code>, <code>tag</code> или <code>branch</code>,
+чтобы указать что-то ещё. Вот пример указания того, что вы хотите
+использовать последний коммит из ветки <code>next</code>:</p>
+
+<pre><code class="language-toml">[dependencies]
+rand = { git = &quot;https://github.com/rust-lang-nursery/rand&quot;, branch = &quot;next&quot; }
+</code></pre>
+
+<h1 id='Указание-локальных-зависимостей' class='section-header'><a href='#Указание-локальных-зависимостей'>Указание локальных зависимостей</a></h1>
+<p>Со временем наш проект <code>hello_world</code> из <a href="guide.html">руководства</a> значительно
+вырос! Понятно, что мы, вероятно, хотим разделить контейнер на несколько других.
+Для этого Cargo поддерживает <strong>пути до зависимостей</strong>, которые обычно являются
+под-контейнерами, которые живут в одном репозитории. Давайте начнем с создания
+нового контейнера внутри нашего проекта <code>hello_world</code>:</p>
+
+<pre><code class="language-shell"># в папке hello_world/
+$ cargo new hello_utils
+</code></pre>
+
+<p>Это создаст новую папку <code>hello_utils</code>, внутри которой <code>Cargo.toml</code> и папка <code>src</code>
+будут готовы для настройки. Чтобы сообщить Cargo об этом, откройте
+<code>hello_world/Cargo.toml</code> и добавьте <code>hello_utils</code> в ваши зависимости:</p>
+
+<pre><code class="language-toml">[dependencies]
+hello_utils = { path = &quot;hello_utils&quot; }
+</code></pre>
+
+<p>Это укажет Cargo, что наш проект зависит от контейнера с именем <code>hello_utils</code>,
+который находится в папке <code>hello_utils</code> (относительно <code>Cargo.toml</code>,
+в котором это указано).</p>
+
+<p>Вот и всё! Следующий <code>cargo build</code> автоматически соберёт <code>hello_utils</code> и все
+свои зависимости, и другие контейнеры могут использовать под-контейнеры тем же
+образом. Однако, контейнеры, которые используют зависимости, указанные по
+локальному пути, не допускаются на <a href="https://crates.io/">crates.io</a>.
+Если мы хотим опубликовать наш контейнер <code>hello_world</code>, мы должны сперва
+опубликовать <code>hello_utils</code> на <a href="https://crates.io">crates.io</a>
+(или указать адрес <code>git</code> репозитория) и указать версию в строке зависимости:</p>
+
+<pre><code class="language-toml">[dependencies]
+hello_utils = { path = &quot;hello_utils&quot;, version = &quot;0.1.0&quot; }
+</code></pre>
+
+<h1 id='Переопределение-зависимостей' class='section-header'><a href='#Переопределение-зависимостей'>Переопределение зависимостей</a></h1>
+<p>Иногда вам может понадобиться переопределить одну из Cargo зависимостей.
+Допустим, вы работаете над проектом, используя контейнер
+<a href="https://crates.io/crates/uuid"><code>uuid</code></a>, который зависит от
+<a href="https://crates.io/crates/rand"><code>rand</code></a>. Вы обнаружили ошибку в <code>rand</code>, и она
+уже исправлена, по пока не опубликована. Вы хотите проверить это исправление,
+поэтому давайте сначала посмотрим, как будет выглядеть ваш <code>Cargo.toml</code>:</p>
+
+<pre><code class="language-toml">[package]
+name = &quot;my-awesome-crate&quot;
+version = &quot;0.2.0&quot;
+authors = [&quot;The Rust Project Developers&quot;]
+
+[dependencies]
+uuid = &quot;0.2&quot;
+</code></pre>
+
+<p>Чтобы переопределить зависимость <code>rand</code> контейнера <code>uuid</code>, мы будем
+использовать <a href="manifest.html#the-replace-section">секцию <code>[replace]</code></a> в <code>Cargo.toml</code>,
+добавив это в конце:</p>
+
+<pre><code class="language-toml">[replace]
+&quot;rand:0.3.14&quot; = { git = &#39;https://github.com/rust-lang-nursery/rand&#39; }
+</code></pre>
+
+<p>Это означает, что <code>rand</code> версии 0.3.14, которую мы сейчас используем, будет
+заменена веткой master репозитория <code>rand</code> на GitHub. В следующий раз, когда вы
+выполните <code>cargo build</code>, Cargo возьмёт на себя проверку этого репозитория и
+сборку <code>uuid</code> с обновлённой версией.</p>
+
+<p>Обратите внимание, что в секции <code>[replace]</code> переопределяемый контейнер должен
+иметь не только такое же имя, но и ту же версию, что и оригинальный. Это
+означает, что если в <code>master</code> ветке версия <code>rand</code> была обновлена до, скажем,
+0.4.3, то вам необходимо выполнить несколько дополнительных шагов для
+тестирования контейнера:</p>
+
+<ol>
+<li>Создайте форк оригинального репозитория</li>
+<li>Создайте ветку, начинающуюся с релиза версии 0.3.14 (вероятно, отмечена
+тегом 0.3.14)</li>
+<li>Найдите исправление и отправьте его в вашу ветку</li>
+<li>В секции <code>[replace]</code> укажите ваш git репозиторий и ветку</li>
+</ol>
+
+<p>Этот метод также может быть полезен при тестировании новых функций зависимости.
+Используя этот метод вы можете использовать ветку, в которой вы будете
+добавлять фичи, а затем, когда она будет готова, вы можете отправить
+pull-request в основной репозиторий. Пока вы будете ожидать одобрения
+pull-request, вы можете работать локально с использованием <code>[replace]</code>, а
+затем, когда pull-request будет принят и опубликован, вы можете удалить секцию
+<code>[remove]</code> и использовать недавно опубликованную версию.</p>
+
+<p>Примечание: в файле <code>Cargo.lock</code> будут перечислены две версии переопределённого
+контейнера: один для оригинального контейнера, а другой для версии, указанной в
+<code>[replace]</code>. С помощью <code>cargo build -v</code> можно проверить, что только одна версия
+используется при сборке.</p>
+
+<h3 id='Переопределение-локальными-зависимостями' class='section-header'><a href='#Переопределение-локальными-зависимостями'>Переопределение локальными зависимостями</a></h3>
+<p>Иногда вы только временно работаете над контейнером, и вы не хотите изменять
+<code>Cargo.toml</code> с помощью секции <code>[replace]</code>, описанной выше. Для этого случая
+Cargo предлагает ограниченную версию переопределений, называемую <strong>путевыми
+переопределениями</strong>.</p>
+
+<p>Как и раньше, предположим, вы работаете над проектом, использующем
+<a href="https://crates.io/crates/uuid"><code>uuid</code></a>, который зависит от
+<a href="https://crates.io/crates/rand"><code>rand</code></a>. На этот раз вы тот, кто нашёл ошибку в
+контейнере <code>rand</code> и вы хотите написать патч и проверить его, используя вашу
+версию <code>rand</code> в контейнере <code>uuid</code>. Вот, как выглядит <code>Cargo.toml</code>
+в контейнере <code>uuid</code>:</p>
+
+<pre><code class="language-toml">[package]
+name = &quot;uuid&quot;
+version = &quot;0.2.2&quot;
+authors = [&quot;The Rust Project Developers&quot;]
+
+[dependencies]
+rand = { version = &quot;0.3&quot;, optional = true }
+</code></pre>
+
+<p>Вы тестируете локальную копию <code>rand</code>, скажем, в каталоге <code>~/src</code>:</p>
+
+<pre><code class="language-shell">$ cd ~/src
+$ git clone https://github.com/rust-lang-nursery/rand
+</code></pre>
+
+<p>Переопределение пути передаётся в Cargo через механизм конфигурации
+<code>.cargo/config</code>. Если Cargo обнаружит эту конфигурацию при сборке вашего пакета,
+он будет использовать переопределённый на вашей локальной машине путь вместо
+источника, указанного в <code>Cargo.toml</code>.</p>
+
+<p>Cargo ищет каталог с именем <code>.cargo</code> вверх по иерархии каталогов вашего проекта.
+Если ваш проект находится в <code>/path/to/project/uuid</code>, он будет искать <code>.cargo</code> в:</p>
+
+<ul>
+<li><code>/path/to/project/uuid</code></li>
+<li><code>/path/to/project</code></li>
+<li><code>/path/to</code></li>
+<li><code>/path</code></li>
+<li><code>/</code></li>
+</ul>
+
+<p>Это позволяет вам указать свои переопределения в родительском каталоге, который
+включает в себя пакеты, которые вы обычно используете на локальном компьютере,
+и использовать их во всех проектах.</p>
+
+<p>Чтобы указать переопределения, создайте файл <code>.cargo/config</code> у некоторого предка
+каталога вашего проекта (обычно его размещают в корневой директории вашего кода
+или в вашем домашнем каталоге).</p>
+
+<p>Поместите это внутрь файла:</p>
+
+<pre><code class="language-toml">paths = [&quot;/path/to/project/rand&quot;]
+</code></pre>
+
+<p>Этот массив должен заполняться каталогами, содержащими <code>Cargo.toml</code>.
+В этом случае мы добавляем переопределение <code>rand</code>, поэтому
+этот контейнер будет единственным, который будет переопределен.
+Указанный путь должен быть абсолютным.</p>
+
+<p>Однако переопределения пути более ограничены, чем секция <code>[replace]</code>, тем более,
+что они не могут изменить структуру графика зависимостей.
+В заменяемом контейнере набор зависимостей должен быть точно таким же, как и в
+оригинальном. Например, это означает, что переопределения пути не могут
+использоваться для проверки добавления зависимостей к контейнеру,
+в этой ситуации следует использовать секцию <code>[replace]</code>.</p>
+
+<p>Примечание: использование локальной конфигурации для переопределения
+путей работает только для контейнеров, которые были опубликованы на <a href="https://crates.io/">crates.io</a>.
+Вы не можете использовать эту функцию для локальных неопубликованных контейнеров.</p>
+
+<p>Более подробную информацию о локальной конфигурации можно найти в
+<a href="config.html">документации по конфигурации</a>.</p>
+
+<h1 id='Платформо-специфичные-зависимости' class='section-header'><a href='#Платформо-специфичные-зависимости'>Платформо-специфичные зависимости</a></h1>
+<p>Специфичные для платформы зависимости указываются в том же формате, как и
+обычные, но указаны под секцией <code>target</code>. Для определения этих секций
+используется обычный Rust-like синтаксис <code>#[cfg]</code>:</p>
+
+<pre><code class="language-toml">[target.&#39;cfg(windows)&#39;.dependencies]
+winhttp = &quot;0.4.0&quot;
+
+[target.&#39;cfg(unix)&#39;.dependencies]
+openssl = &quot;1.0.1&quot;
+
+[target.&#39;cfg(target_arch = &quot;x86&quot;)&#39;.dependencies]
+native = { path = &quot;native/i686&quot; }
+
+[target.&#39;cfg(target_arch = &quot;x86_64&quot;)&#39;.dependencies]
+native = { path = &quot;native/x86_64&quot; }
+</code></pre>
+
+<p>Как и в случае с Rust, здесь поддерживаются операторы <code>not</code>,<code>any</code> и <code>all</code> для
+объединения различных пар имя/значение. Обратите внимание, что синтаксис <code>cfg</code>
+доступен только с Cargo 0.9.0 (Rust 1.8.0).</p>
+
+<p>В дополнение к синтаксису <code>#[cfg]</code> Cargo также поддерживает перечисление полной
+цели, к которой будут относиться зависимости:</p>
+
+<pre><code class="language-toml">[target.x86_64-pc-windows-gnu.dependencies]
+winhttp = &quot;0.4.0&quot;
+
+[target.i686-unknown-linux-gnu.dependencies]
+openssl = &quot;1.0.1&quot;
+</code></pre>
+
+<p>Если вы используете кастомную спецификацию целевой платформы, укажите полный
+путь и имя файла:</p>
+
+<pre><code class="language-toml">[target.&quot;x86_64/windows.json&quot;.dependencies]
+winhttp = &quot;0.4.0&quot;
+
+[target.&quot;i686/linux.json&quot;.dependencies]
+openssl = &quot;1.0.1&quot;
+native = { path = &quot;native/i686&quot; }
+
+[target.&quot;x86_64/linux.json&quot;.dependencies]
+openssl = &quot;1.0.1&quot;
+native = { path = &quot;native/x86_64&quot; }
+</code></pre>
+
+<h1 id='Зависимости-для-режима-разработки' class='section-header'><a href='#Зависимости-для-режима-разработки'>Зависимости для режима разработки</a></h1>
+<p>Вы можете добавить секцию <code>[dev-dependencies]</code> в свой <code>Cargo.toml</code>, формат
+которого эквивалентен <code>[dependencies]</code>:</p>
+
+<pre><code class="language-toml">[dev-dependencies]
+tempdir = &quot;0.3&quot;
+</code></pre>
+
+<p>Dev-зависимости используются не при компиляции сборки, а при компиляции тестов,
+примеров и бенчмарков.</p>
+
+<p>Эти зависимости <em>не</em> распространяются на другие пакеты, которые зависят от
+этого пакета.</p>
+
+<p>Вы также можете указать платформо-специфичные зависимости, используя
+<code>dev-dependencies</code> вместо <code>dependencies</code> в секции <code>target</code>. Например:</p>
+
+<pre><code class="language-toml">[target.&#39;cfg(unix)&#39;.dev-dependencies]
+mio = &quot;0.0.1&quot;
+</code></pre>
+
+<h1 id='Зависимости-для-сборки' class='section-header'><a href='#Зависимости-для-сборки'>Зависимости для сборки</a></h1>
+<p>Вы можете объявить зависимость от других контейнеров на основе Cargo для их
+использования в сценариях сборки. Зависимости объявляются через раздел
+<code>build-dependencies</code> манифеста:</p>
+
+<pre><code class="language-toml">[build-dependencies]
+gcc = &quot;0.3&quot;
+</code></pre>
+
+<p>Сценарий сборки <strong>не</strong> имеет доступа к зависимостям, указанным в секции
+<code>dependencies</code> или <code>dev-dependencies</code>. Зависимости сборки также не будут
+доступны для самого пакета, если они не указаны в разделе <code>dependencies</code>.
+Сам пакет и сценарий его сборки собираются отдельно, поэтому их зависимости
+могут не совпадать. Cargo.toml проще и чище, используя независимые зависимости
+для независимых целей.</p>
+
+<h1 id='Выбор-возможностей-features' class='section-header'><a href='#Выбор-возможностей-features'>Выбор возможностей (features)</a></h1>
+<p>Если пакет зависит от некоторых возможностей, вы можете выбрать,
+какие из них использовать:</p>
+
+<pre><code class="language-toml">[dependencies.awesome]
+version = &quot;1.3.5&quot;
+default-features = false # не включать стандартные возможности, и, опционально,
+                         # включить указанные возможности
+features = [&quot;secure-password&quot;, &quot;civet&quot;]
+</code></pre>
+
+<p>Больше информации о возможностях можно найти в
+<a href="manifest.html#the-features-section">документации по manifest</a>.</p>
+
+    </main>
+<footer>
+<a href='index.html'>Install</a>
+<span class='sep'>|</span>
+<a href='index.html'>Getting Started</a>
+<span class='sep'>|</span>
+<a href='guide.html'>Guide</a>
+</footer>
+
+<script type='text/javascript' src='javascripts/prism.js'></script>
+<script type='text/javascript' src='javascripts/all.js'></script>
+
+
+</body>
+</html>

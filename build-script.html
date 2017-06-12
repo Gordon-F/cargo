@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <title>Поддержка сборочных скриптов</title>
+
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css">
+<link rel="stylesheet" type="text/css" href="stylesheets/all.css">
+<link rel="stylesheet" type="text/css" href="stylesheets/prism.css">
+
+    <script src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+
+
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    <a href='https://github.com/ruRust/cargo-docs-ru' class='fork-me'>
+  <img src='images/forkme.png'/>
+</a>
+
+<div id="header">
+    <a href='https://crates.io' class='logo'>
+        <img id="logo" height=100 width=100 src='images/Cargo-Logo-Small.png'/>
+    </a>
+    <a href="index.html">
+        <h1>CARGO</h1>
+    </a>
+
+    <div class="search">
+        <form action="https://crates.io/search"
+              method="GET">
+            <input name="q" class="search" placeholder="Search crates" type="text"/>
+        </form>
+    </div>
+
+    <div class="nav">
+        <a href='https://crates.io/crates'>Browse All Crates</a>
+
+        <span class='sep'>|</span>
+
+        <div class="dropdown-container">
+            <button class="dropdown">
+                Docs
+                <span class="arrow"></span>
+            </button>
+            <ul id="current-user-links" class="dropdown" data-bindattr-503="503">
+                <li><a href='index.html'>Введение</a></li>
+                <li><a href='guide.html'>Руководство</a></li>
+                <li><a href='specifying-dependencies.html'>Specifying Dependencies</a></li>
+                <li><a href='crates-io.html'>Publishing on crates.io</a></li>
+                <li><a href='faq.html'>FAQ</a></li>
+                <li><a href='manifest.html'>Cargo.toml Format</a></li>
+                <li><a href='build-script.html'>Сборочные скрипты</a></li>
+                <li><a href='config.html'>Настройка</a></li>
+                <li><a href='pkgid-spec.html'>Package ID specs</a></li>
+                <li><a href='environment-variables.html'>Environment Variables</a></li>
+                <li><a href='source-replacement.html'>Source Replacement</a></li>
+                <li><a href='machine-readable-output.html'>Машиночитаемый вывод</a></li>
+                <li><a href='policies.html'>Policies</a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<main>
+
+
+    <h1 class="title">Поддержка сборочных скриптов</h1>
+    <p>Некоторые пакеты требуют компиляции стороннего кода написанного на других
+языках программирования, например СИ-библиотек. Другие пакеты предназначены
+для линковки с СИ-библиотеками. Они могут располагаться где-то в системе, или
+собираться из исходников. Третий вариант - это контейнеры, которые требуют 
+дополнительной подготовки к сборке, например генерации кода перед сборкой.</p>
+
+<p>Cargo не ставит целью заменить инструменты которые хорошо оптимизированы
+для своих задач. Вместо этого, данные инструменты можно интегрировать в процесс 
+сборки посредством опции <code>build</code> сборочного манифеста.</p>
+
+<pre><code class="language-toml">[package]
+# ...
+build = &quot;build.rs&quot;
+</code></pre>
+
+<p>Rust файл, указанный в опции <code>build</code> (относительно корня пакета) будет
+скомпилирован и выполнен перед тем, как что-либо еще будет компилироваться
+в этом пакете. Это позволяет вашему rust-коду зависеть от других собранных
+или сгенерированных артефактов. Опция <code>build</code> не имеет значения по умолчанию,
+и должна быть указана явно, если это требуется.</p>
+
+<p>Причание. В rust 1.17 этот механизм был доработан следующим образом. Если
+в корневой директории контейнера есть файл build.rs, то считается, что опция
+build = &quot;build.rs&quot; указана. Отключить это вы можете задав build=false.</p>
+
+<p>Примеры случаев, для которых подходит опция <code>build</code>:</p>
+
+<ul>
+<li>Сборка статической С-библиотеки</li>
+<li>Поиск С-библиотеки на диске</li>
+<li>Генерация rust-модуля из спецификации</li>
+<li>Осуществление любой платформо-специфичной конфигурации, которая нужна для сборки</li>
+</ul>
+
+<p>Каждый из этих случаев детально описан ниже для пояснения того, как работает 
+опция <code>build</code>.</p>
+
+<h2 id='Входные-данные-для-скрипта-сборки' class='section-header'><a href='#Входные-данные-для-скрипта-сборки'>Входные данные для скрипта сборки</a></h2>
+<p>Когда вы запускаете скрипт сборки, можно задать параметры, которые передаются
+путем задания переменных окружения <a href="environment-variables.html">environment variables</a>.</p>
+
+<p>Вдобавок к переменным окружения, текущая директория скрипта сборки является
+директорией пакета скрипта сборки.</p>
+
+<h2 id='Выходной-результат-скрипта-сборки' class='section-header'><a href='#Выходной-результат-скрипта-сборки'>Выходной результат скрипта сборки</a></h2>
+<p>Все строки, которые будут напечатаны в stdout, будут записаны в файл
+<code>target/debug/build/&lt;pkg&gt;/output</code> (точное расположение зависит от вашей конфигурации).
+Все строки, которые начинаются с <code>cargo:</code> интерпретируются напрямую cargo. 
+Эти строки обязаны задаваться в форме <code>cargo:key=value</code>, как показано в примере:</p>
+
+<pre><code class="language-notrust">cargo:rustc-link-lib=static=foo
+cargo:rustc-link-search=native=/path/to/foo
+cargo:rustc-cfg=foo
+cargo:root=/path/to/foo
+cargo:libdir=/path/to/foo/lib
+cargo:include=/path/to/foo/include
+</code></pre>
+
+<p>Ниже перечислены ключи, которые влияют на cargo:</p>
+
+<ul>
+<li><code>rustc-link-lib=[KIND=]NAME</code> передать указанное значение компилятору с опцией <code>-l</code>.
+Опциональный параметр KIND может принимать значения static, dylib(по умолчанию), 
+framework. Для получения подробностей см. rustc --help</li>
+<li><code>rustc-link-search=[KIND=]PATH</code> передать указанное значение компилятору с опцией <code>-L</code>.
+Опциональный параметр KIND может быть одним из: dependency, crate, native, framework,
+all (по умолчанию). См. rustc --help для подробностей.</li>
+<li><code>rustc-flags=FLAGS</code> набор флагов, которые следует передать компилятору. 
+Поддерживаются только <code>-l</code> и <code>-L</code> (Прим.переводчика -- тогда на кой оно нужно?). </li>
+<li><p><code>rustc-cfg=FEATURE</code> указывает передать компилятору c директивой <code>--cfg</code>
+указанную возможность. Это может быть полезным для определения на этапе компиляции
+различных возможностей.</p></li>
+<li><p><code>rerun-if-changed=PATH</code> путь к файлу или директории, которые при изменении
+должны вызвать перезапуск скрипта сборки(определяется по атрибуту last-modified).
+Обычно скрипт сборки перезапускается если любой файл внутри контейнера изменяется. 
+Эта опция позволяет указать более узкий набор файлов. Если опция указывает
+на директорию, то cargo смотрит только на изменение времени модификации директории,
+и не смотрит на каждый файл. Для того, чтобы скрипт перезапускался при любом изменении
+во всей директории, напечатайте строку с директорией и другую строку для всего
+внутри нее, рекурсивно. </p></li>
+<li><p><code>warning=MESSAGE</code> это сообщение будет напечатано в основную консоль после того, как
+скрипт сборки закончит выполнение. Варнинги печатаются только на зависимостях,
+добавленных через path. Таким образом, варнинги на зависимостях, которые приползли с
+crates.io не эмитятся по умолчанию.</p></li>
+</ul>
+
+<p>Любой другой элемент является пользовательскими мета-данными, и передается зависимостям.
+Больше информации можно найти в секции <a href="#%D0%9E%D0%BF%D1%86%D0%B8%D1%8F-%D1%81%D0%B1%D0%BE%D1%80%D0%BE%D1%87%D0%BD%D0%BE%D0%B3%D0%BE-%D0%BC%D0%B0%D0%BD%D0%B8%D1%84%D0%B5%D1%81%D1%82%D0%B0-links"><code>links</code></a>.</p>
+
+<h2 id='Зависимости-для-процесса-сборки' class='section-header'><a href='#Зависимости-для-процесса-сборки'>Зависимости для процесса сборки</a></h2>
+<p>Скрипт сборки может иметь зависимости на другие cargo-пакеты.
+Эти зависимости объявляются в секции <code>build-dependencies</code>.</p>
+
+<pre><code class="language-toml">[build-dependencies]
+foo = { git = &quot;https://github.com/your-packages/foo&quot; }
+</code></pre>
+
+<p>Скрипту сборки НЕ ДОСТУПНЫ зависимости, перечисленные в секциях
+<code>dependencies</code> и <code>dev-dependencies</code>. Так же, все зависимости этапа сборки 
+недоступны пакету, и если они нужны, то их следует указать явно.</p>
+
+<h2 id='Опция-сборочного-манифеста-links' class='section-header'><a href='#Опция-сборочного-манифеста-links'>Опция сборочного манифеста <code>links</code></a></h2>
+<p>В добавление к опции <code>build</code>, Cargo поддерживает опцию <code>links</code> для указания
+нативных библиотек, которые следует прилинковать.</p>
+
+<pre><code class="language-toml">[package]
+# ...
+links = &quot;foo&quot;
+build = &quot;build.rs&quot;
+</code></pre>
+
+<p>Это означает, что пакет линкуется с нативной библиотекой <code>libfoo</code>, и он
+имеет скрипт сборки, который находит/собирает эту библиотеку. Cargo
+требует, чтобы опция <code>build</code> была указана, если вы используете опцию <code>links</code>.</p>
+
+<p>Цель этого ключа - чтобы Cargo знал о наборе используемых нативных библиотек,
+и передавал эту метаинформацию между скриптами сборки пакетов.</p>
+
+<p>Вы не можете слинковать несколько пакетов с одной нативной либой.
+Однако есть <a href="#-sys-%D0%BF%D0%B0%D0%BA%D0%B5%D1%82%D1%8B">определенные случаи соглашений</a> в которых это требование
+смягчено.</p>
+
+<p>Как мы выяснили выше, каждый билд-скрипт может генерировать набор метаданных
+из пар ключ-значение. Эти метаданные передаются билд-скриптам зависимых пакетов.</p>
+
+<p>Например, если  <code>libbar</code> зависит от <code>libfoo</code>, тогда если <code>libfoo</code> генерирует
+<code>key=value</code> как часть своих метаданных, то билд-скрипт <code>libbar</code> будет иметь 
+переменную окружения <code>DEP_FOO_KEY=value</code>.</p>
+
+<p>Также надо учитывать, что метаданные передаются непосредственно-зависящим пакетам,
+но не транзитивно на остальных. Мотивация такой передачи данных описана ниже
+в секции по линковке системных либ.</p>
+
+<h2 id='Явное-указание-метаданных' class='section-header'><a href='#Явное-указание-метаданных'>Явное указание метаданных</a></h2>
+<p>Ключ <code>links</code> включает поддержку явного указания метаданных для конкретной библиотеки.
+Цель этого действия может состоять в том, чтобы сократить время компиляции.
+Для явного указания расположите соответствующую секцию конфигурации в 
+<a href="config.html">любом доступном</a> для cargo месте .</p>
+
+<pre><code class="language-toml">[target.x86_64-unknown-linux-gnu.foo]
+rustc-link-search = [&quot;/path/to/foo&quot;]
+rustc-link-lib = [&quot;foo&quot;]
+root = &quot;/path/to/foo&quot;
+key = &quot;value&quot;
+</code></pre>
+
+<p>Эта секция декларирует, что для цели <code>x86_64-unknown-linux-gnu</code> бибилотека с именем
+<code>foo</code> имеет явно указанные метаданные. Эти метаданные являются такими же, как
+можно было бы получить запустив сборочный скрипт, предоставляющий набор пар
+ключ-значение.</p>
+
+<p>В таком варианте, если пакет декларирует, что линкуется с foo, сборочный скрипт
+<strong>не будет</strong> скомпилирован и запущен, что сэкономит время. Вместо этого будут
+использованы указанные метаданные.</p>
+
+<h1 id='Конкретный-пример-кодогенерация' class='section-header'><a href='#Конкретный-пример-кодогенерация'>Конкретный пример: кодогенерация</a></h1>
+<p>Некоторые пакеты cargo требуют, чтобы перед началом компиляции была произведена
+генерация кода. Изучим простой пример, который осуществляет генерацию кода
+в процессе сборки проекта.</p>
+
+<p>Структура директории пакета выглядит следующим образом:</p>
+
+<pre><code class="language-notrust">.
+├── Cargo.toml
+├── build.rs
+└── src
+    └── main.rs
+
+1 directory, 3 files
+</code></pre>
+
+<p>Как мы можем видеть, имеется исходник скрипта <code>build.rs</code> и исходник бинарника
+<code>main.rs</code>. Содержимое Cargo.toml:</p>
+
+<pre><code class="language-toml"># Cargo.toml
+
+[package]
+name = &quot;hello-from-generated-code&quot;
+version = &quot;0.1.0&quot;
+authors = [&quot;you@example.com&quot;]
+build = &quot;build.rs&quot;
+</code></pre>
+
+<p>Тут указано, что мы используем сборочный скрипт.
+Его содержимое следующее:</p>
+
+<pre class="rust rust-example-rendered">
+<span class="comment">// build.rs</span>
+
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">env</span>;
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fs</span>::<span class="ident">File</span>;
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">io</span>::<span class="ident">Write</span>;
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">path</span>::<span class="ident">Path</span>;
+
+<span class="kw">fn</span> <span class="ident">main</span>() {
+    <span class="kw">let</span> <span class="ident">out_dir</span> <span class="op">=</span> <span class="ident">env</span>::<span class="ident">var</span>(<span class="string">&quot;OUT_DIR&quot;</span>).<span class="ident">unwrap</span>();
+    <span class="kw">let</span> <span class="ident">dest_path</span> <span class="op">=</span> <span class="ident">Path</span>::<span class="ident">new</span>(<span class="kw-2">&amp;</span><span class="ident">out_dir</span>).<span class="ident">join</span>(<span class="string">&quot;hello.rs&quot;</span>);
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">f</span> <span class="op">=</span> <span class="ident">File</span>::<span class="ident">create</span>(<span class="kw-2">&amp;</span><span class="ident">dest_path</span>).<span class="ident">unwrap</span>();
+
+    <span class="ident">f</span>.<span class="ident">write_all</span>(<span class="string">b&quot;
+        pub fn message() -&gt; &amp;&#39;static str {
+            \&quot;Hello, World!\&quot;
+        }
+    &quot;</span>).<span class="ident">unwrap</span>();
+}</pre>
+
+<p>Несколько комментариев к сборочному скрипту:</p>
+
+<ul>
+<li><p>Скрипт использует переменную окружения <code>OUT_DIR</code>, которая содержит путь к 
+директории для сгенерированного кода. В качестве директории для входных файлов
+используется текущая директория запущенного процесса. (в нашем случае
+чтения каких бы то ни было входных файлов не производится)</p></li>
+<li><p>Этот скрипт тривиален. Он просто генерирует файл, содержащий маленький 
+кусочек кода. В реальных задачах ваш скрипт сборки может делать что-то
+более полезное. Например, это может быть генерация rust-модуля из СИ-хэдэров,
+или каких-то других языков.</p></li>
+</ul>
+
+<p>Содержимое main.rs:</p>
+
+<pre class="rust rust-example-rendered">
+<span class="comment">// src/main.rs</span>
+
+<span class="macro">include</span><span class="macro">!</span>(<span class="macro">concat</span><span class="macro">!</span>(<span class="macro">env</span><span class="macro">!</span>(<span class="string">&quot;OUT_DIR&quot;</span>), <span class="string">&quot;/hello.rs&quot;</span>));
+
+<span class="kw">fn</span> <span class="ident">main</span>() {
+    <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">message</span>());
+}</pre>
+
+<p>Как можно видеть, здесь не происходит никакой магии: мы подгружаем сгенерированный
+ранее код при помощи макроса <code>include!</code>. Макрос <code>concat!</code> осуществляет конкатенацию строк
+на этапе компиляции. Таким образом, получается путь к подгужаемому файлу.</p>
+
+<p>Используя показанную структуру, вы можете подгружать любое количество сгенерированных
+файлов.</p>
+
+<h1 id='Конкретный-пример-сборка-нативного-кода' class='section-header'><a href='#Конкретный-пример-сборка-нативного-кода'>Конкретный пример: сборка нативного кода</a></h1>
+<p>Иногда нужно собрать нативный СИ или СИ++ код и использовать его как часть
+пакета. Это еще одна возможность, которую предоставляет сборочный скрипт.
+Для примера создадим rust-программу, которая вызывает СИ-код, который
+печатает “Hello, World!”.</p>
+
+<p>Содержимое директории проекта:</p>
+
+<pre><code class="language-notrust">.
+├── Cargo.toml
+├── build.rs
+└── src
+    ├── hello.c
+    └── main.rs
+
+1 directory, 4 files
+</code></pre>
+
+<p>Содержимое Cargo.toml:</p>
+
+<pre><code class="language-toml"># Cargo.toml
+
+[package]
+name = &quot;hello-world-from-c&quot;
+version = &quot;0.1.0&quot;
+authors = [&quot;you@example.com&quot;]
+build = &quot;build.rs&quot;
+</code></pre>
+
+<p>Контент сборочного скрипта выглядит следующим образом:</p>
+
+<pre class="rust rust-example-rendered">
+<span class="comment">// build.rs</span>
+
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">process</span>::<span class="ident">Command</span>;
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">env</span>;
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">path</span>::<span class="ident">Path</span>;
+
+<span class="kw">fn</span> <span class="ident">main</span>() {
+    <span class="kw">let</span> <span class="ident">out_dir</span> <span class="op">=</span> <span class="ident">env</span>::<span class="ident">var</span>(<span class="string">&quot;OUT_DIR&quot;</span>).<span class="ident">unwrap</span>();
+
+    <span class="comment">// note that there are a number of downsides to this approach, the comments</span>
+    <span class="comment">// below detail how to improve the portability of these commands.</span>
+    <span class="ident">Command</span>::<span class="ident">new</span>(<span class="string">&quot;gcc&quot;</span>).<span class="ident">args</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;src/hello.c&quot;</span>, <span class="string">&quot;-c&quot;</span>, <span class="string">&quot;-fPIC&quot;</span>, <span class="string">&quot;-o&quot;</span>])
+                       .<span class="ident">arg</span>(<span class="kw-2">&amp;</span><span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;{}/hello.o&quot;</span>, <span class="ident">out_dir</span>))
+                       .<span class="ident">status</span>().<span class="ident">unwrap</span>();
+    <span class="ident">Command</span>::<span class="ident">new</span>(<span class="string">&quot;ar&quot;</span>).<span class="ident">args</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;crus&quot;</span>, <span class="string">&quot;libhello.a&quot;</span>, <span class="string">&quot;hello.o&quot;</span>])
+                      .<span class="ident">current_dir</span>(<span class="kw-2">&amp;</span><span class="ident">Path</span>::<span class="ident">new</span>(<span class="kw-2">&amp;</span><span class="ident">out_dir</span>))
+                      .<span class="ident">status</span>().<span class="ident">unwrap</span>();
+
+    <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;cargo:rustc-link-search=native={}&quot;</span>, <span class="ident">out_dir</span>);
+    <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;cargo:rustc-link-lib=static=hello&quot;</span>);
+}</pre>
+
+<p>Этот сборочный скрипт при запуске компилирует наш СИ файл в объектный файл 
+(при помощи <code>gcc</code>) и затем конвертирует этот объектник в статическую библиотеку
+(при помощи <code>ar</code>). На финальном шаге устанавливаются опции cargo, которые 
+предписывают искать библиотеку для линковки в <code>out_dir</code> и линковаться статически
+с библиотекой <code>libhello.a</code> (при запуске rustc будет использован 
+ключ <code>-l static=hello</code>).</p>
+
+<p>К данному скрипту имеется несколько замечаний:</p>
+
+<ul>
+<li>Программа <code>gcc</code> присутствует не на всех платформах. Например, вряд ли на Windows 
+будет gcc, и не все Unix-платформы могут иметь gcc. С командой <code>ar</code> аналогичная
+ситуация.</li>
+<li>Эти команды не учитывают случай, если мы производим кросс-компиляцию. Если мы 
+производим кросс-компиляцию для платформы типа Андроид, то вряд ли gcc соберет
+нам исполняемый файл с ARM-архитектурой.</li>
+</ul>
+
+<p>Однако, не стоит отчаиваться. Нам поможет секция <code>build-dependencies</code>. Экосистема
+Cargo имеет пакеты, которые полностью или частично абстрагируют нас от платформы 
+и делают этот этап сборки более простым, портабельным и стандартизованным.
+Для примера, сборочный скрипт может быть написан следующим образом:</p>
+
+<pre class="rust rust-example-rendered">
+<span class="comment">// build.rs</span>
+
+<span class="comment">// Bring in a dependency on an externally maintained `gcc` package which manages</span>
+<span class="comment">// invoking the C compiler.</span>
+<span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">gcc</span>;
+
+<span class="kw">fn</span> <span class="ident">main</span>() {
+    <span class="ident">gcc</span>::<span class="ident">compile_library</span>(<span class="string">&quot;libhello.a&quot;</span>, <span class="kw-2">&amp;</span>[<span class="string">&quot;src/hello.c&quot;</span>]);
+}</pre>
+
+<p>Это потребует зависимости на <code>gcc</code> контейнер. Добавить ее понадобиться в <code>Cargo.toml</code>:</p>
+
+<pre><code class="language-toml">[build-dependencies]
+gcc = &quot;0.3&quot;
+</code></pre>
+
+<p>Контейнер <a href="https://crates.io/crates/gcc"><code>gcc</code> crate</a> абстракция, позволяющая работать
+с различными вариантами, использующими С-код.</p>
+
+<ul>
+<li>Выполняется правильный компилятор (MSVC на windows, <code>gcc</code> на MinGW, <code>cc</code>
+на Unix- платформах и т.д.).</li>
+<li>Принимает переменную окружения TARGET для передачи правильных флажков компилятору.</li>
+<li>Другие переменные окружения (<code>OPT_LEVEL</code>, <code>DEBUG</code>, и т.д.) обрабатываются автоматически.</li>
+<li>Стандартный вывод и расположение директории <code>OUT_DIR</code> так же обрабатываются
+контейнером <code>gcc</code>.</li>
+</ul>
+
+<p>Here we can start to see some of the major benefits of farming as much
+functionality as possible out to common build dependencies rather than
+duplicating logic across all build scripts!</p>
+
+<p>Вернемся к исследованию содержимого директории <code>src</code>:</p>
+
+<pre><code class="language-c">// src/hello.c
+
+#include &lt;stdio.h&gt;
+
+void hello() {
+    printf(&quot;Hello, World!\n&quot;);
+}
+</code></pre>
+
+<pre class="rust rust-example-rendered">
+<span class="comment">// src/main.rs</span>
+
+<span class="comment">// аттрибут `#[link]` не является необходимым. Мы делегируем решение того,</span>
+<span class="comment">// с какой либой линковаться в скрипт сборки, вместо того чтобы захардкодить</span>
+<span class="comment">// его в исходном коде</span>
+ 
+<span class="kw">extern</span> { <span class="kw">fn</span> <span class="ident">hello</span>(); }
+
+<span class="kw">fn</span> <span class="ident">main</span>() {
+    <span class="kw">unsafe</span> { <span class="ident">hello</span>(); }
+}</pre>
+
+<p>And there we go! This should complete our example of building some C code from a
+Cargo package using the build script itself. This also shows why using a build
+dependency can be crucial in many situations and even much more concise!</p>
+
+<p>Еще мы тут увидели пример использования в скрипте сборки зависимостей, специально
+предназначенных для процесса сборки.</p>
+
+<h1 id='Конкретный-пример-линковка-с-системными-библиотеками' class='section-header'><a href='#Конкретный-пример-линковка-с-системными-библиотеками'>Конкретный пример: линковка с системными библиотеками</a></h1>
+<p>В финальном примере будет показано как cargo линкуется с системными библиотеками,
+и как скрипт сборки может управлять этим процессом.</p>
+
+<p>Иногда для контейнеров rust требуются системные библиотеки.</p>
+
+<p>Quite frequently a Rust crate wants to link to a native library often provided
+on the system to bind its functionality or just use it as part of an
+implementation detail. This is quite a nuanced problem when it comes to
+performing this in a platform-agnostic fashion, and the purpose of a build
+script is again to farm out as much of this as possible to make this as easy as
+possible for consumers.</p>
+
+<p>В качестве примера рассмотрим одну из зависимостей самого cargo
+<a href="https://github.com/alexcrichton/git2-rs/tree/master/libgit2-sys">Cargo’s own dependencies</a>, <a href="https://github.com/libgit2/libgit2">libgit2</a>. Эта библиотека имеет
+некоторые ограничения:</p>
+
+<ul>
+<li>Имеет опциональную зависимость на OpenSSL на Unix-системах для реализации
+https-транспорта.</li>
+<li>Имеет опциональную зависимость на libssh2 на всех платформах для реализации 
+ssh-транспорта.</li>
+<li>Зачастую не установлена по умолчанию на всех системах.</li>
+<li>Собирается из исходников при помощи <code>cmake</code>.</li>
+</ul>
+
+<p>Чтобы понять, как это происходит, рассмотрим билд-манифест Cargo.toml.</p>
+
+<pre><code class="language-toml">[package]
+name = &quot;libgit2-sys&quot;
+version = &quot;0.1.0&quot;
+authors = [&quot;...&quot;]
+links = &quot;git2&quot;
+build = &quot;build.rs&quot;
+
+[dependencies]
+libssh2-sys = { git = &quot;https://github.com/alexcrichton/ssh2-rs&quot; }
+
+[target.&#39;cfg(unix)&#39;.dependencies]
+openssl-sys = { git = &quot;https://github.com/alexcrichton/openssl-sys&quot; }
+
+# ...
+</code></pre>
+
+<p>Можно видеть, что в первой секции сборочного манифеста мы указываем сборочный скрипт 
+опцией <code>build</code>. Также этот пример имеет опцию <code>links</code>, которая указывает нашему
+контейнеру (crate <code>libgit2-sys</code>) линковаться с нативной либой <code>git2</code>.</p>
+
+<p>Контейнер имеет безусловную зависимость на <code>libssh2</code> через указание
+<code>libssh2-sys</code> контейнера, и также платформо-специфичную зависимость на <code>openssl-sys</code></p>
+
+<p>Тут имеется следующий интуитивно-непонятный момент: у нас указана Си-зависимость
+в сборочном манифесте cargo. Это является частью соглашений для cargo, которому
+посвящена следующая глава.</p>
+
+<h2 id='-sys-пакеты' class='section-header'><a href='#-sys-пакеты'><code>*-sys</code> пакеты</a></h2>
+<p>Для облегчения линковки с системными библиотеками cargo имеет <em>соглашение</em>
+по именованию пакетов и функциональности. Любой пакет с именем <code>foo-sys</code> 
+будет предоставлять две основные функциональные возможности:</p>
+
+<ul>
+<li><p>контейнер будет линковаться с библиотекой <code>libfoo</code>. Обычно это вызывает
+проверку того, что либа <code>libfoo</code> установлена в системе. Если не установлена,
+то запускается процесс ее сборки.</p></li>
+<li><p>контейнер будет предоставлять <strong>декларации</strong> для функций в <code>libfoo</code>,
+но <strong>НЕ</strong> предоставляет биндингов для абстракций более высокого уровня.</p></li>
+</ul>
+
+<p>Основное множество <code>*-sys</code> пакетов предоставляют основное множество зависимостей
+для линковки с нативными либами. Этим достигаются следующие выгоды для
+контейнеров, имеющих отношение к нативным либам:</p>
+
+<ul>
+<li>Зависимости на <code>foo-sys</code> упрощают вышеописанное правило одного пакета 
+на опцию <code>links</code>.</li>
+<li>A common dependency allows centralizing logic on discovering <code>libfoo</code> itself
+(или сборку с исходников).</li>
+<li>Эти зависимости легко переопределить.</li>
+</ul>
+
+<h2 id='Сборка-libgit2' class='section-header'><a href='#Сборка-libgit2'>Сборка libgit2</a></h2>
+<p>Теперь, когда мы получили зависимости libgit2, нам нужно написать логику 
+сборочного скрипта. Мы не будем разбираться в узко-специфичных моментах кода
+и сконцентрируем свое внимание лишь на высокоуровневых деталях сборочного скрипта
+контейнера <code>libgit2-sys</code>. Это не является рекомендацией для всех пакетов, а лишь
+является одной из возможных специфичных стратегий.</p>
+
+<p>На первом шаге сборочный скрипт может попытаться найти место, в которое установлена
+libgit2. Это можно попытаться сделать при помощи предустановленного 
+ <code>pkg-config</code> (если он есть). We’ll also use a <code>build-dependencies</code>
+section to refactor out all the <code>pkg-config</code> related code (or someone’s already
+done that!).</p>
+
+<p>Если у <code>pkg-config</code> не получилось найти libgit2, или если <code>pkg-config</code> не 
+установлен, следующим шагом будет сборка libgit2 из встроенных исходников
+(которые распространяются как часть самого <code>libgit2-sys</code>).
+Есть несколько нюансов, которые стоит упомянуть.</p>
+
+<ul>
+<li><p>Система сборки libgit2, <code>cmake</code>, должна быть способна найти опциональную
+зависимость для libgit2’s -- libssh2. Нам не помешает убедиться, что она
+была собрана (это часть зависимостей Cargo), и мы должны обменяться с cargo
+этой информацией.
+Для осуществления этого используем формат метаданных для обмена между 
+сборочными скриптами. В этом примере пакет libssh2 печатает <code>cargo:root=...</code> 
+для того, чтобы сказать, куда libssh2 установлена. И мы передаем потом эту
+информацию в cmake через переменную окружения <code>CMAKE_PREFIX_PATH</code>.</p></li>
+<li><p>Нам надо указать специфичные <code>CFLAGS</code> флаги для сборки СИ-кода (и сказать
+<code>cmake</code> об этом). Некоторые флаги могут потребовать указания ключа <code>-m64</code> для 
+64-битного кода, <code>-m32</code> для 32-битного кода, или <code>-fPIC</code></p></li>
+<li><p>На финальной стадии вызывается <code>cmake</code> и оказывается располагать весь выхлоп по
+<code>OUT_DIR</code>, и потом мы печатаем необходимые метаданные для указания rustc как линковаться
+с libgit2</p></li>
+</ul>
+
+<p>Большая часть функциональности этого сборочного скрипта легко модифицируется под
+основные зависимости. Поэтому сборочных скрипт запугивает даже в меньшей степени, чем это 
+его описание. На самом деле, предполагается, что скрипты сборки достаточно кратки и 
+и содержат логику, подобную той, что было описано выше для построения 
+необходимых зависимостей.</p>
+
+    </main>
+<footer>
+<a href='index.html'>Install</a>
+<span class='sep'>|</span>
+<a href='index.html'>Getting Started</a>
+<span class='sep'>|</span>
+<a href='guide.html'>Guide</a>
+</footer>
+
+<script type='text/javascript' src='javascripts/prism.js'></script>
+<script type='text/javascript' src='javascripts/all.js'></script>
+
+
+</body>
+</html>
